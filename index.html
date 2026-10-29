@@ -281,6 +281,7 @@ const ICONS = {
   planning:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
   recap:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h7"/></svg>',
   gear:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+  refresh:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>',
   music:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>',
   back:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg>',
   prev:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg>',
@@ -314,7 +315,7 @@ function viewChrono(){
   return `
   <div class="top">
     <div><div class="eyebrow">${esc(dayLong(Date.now()))}</div><h1>${hello} ${esc(r.nom)}</h1></div>
-    <button class="icon-btn" data-act="settings" aria-label="Réglages">${ICONS.gear}</button>
+    <div class="row" style="gap:8px"><button class="icon-btn" data-act="refresh" aria-label="Actualiser l'appli" title="Actualiser">${ICONS.refresh}</button><button class="icon-btn" data-act="settings" aria-label="Réglages">${ICONS.gear}</button></div>
   </div>
   ${offline?'<div class="banner">Données gardées sur cet appareil uniquement (connexion au stockage en ligne indisponible).</div>':""}
   <div class="card">
@@ -745,7 +746,8 @@ function openSettings(){
     <div class="hint">Les données restent sur ce téléphone. Faites une sauvegarde une fois par mois (dans Fichiers, Drive ou par e-mail) pour ne rien perdre en cas de changement de téléphone.${r.derniereSauvegarde?"<br>Dernière sauvegarde : "+esc(new Date(r.derniereSauvegarde).toLocaleDateString("fr-FR")):""}</div>
     <div class="row"><button class="grow" data-act="export">Sauvegarder</button><button class="grow" data-act="import">Restaurer</button></div>
     <input type="file" id="import-file" accept="application/json,.json" hidden>
-  </div>`, {kind:"settings"});
+  </div>
+  <div class="row"><div class="grow hint">${APP_VERSION}</div><button type="button" data-act="refresh">Actualiser l'appli</button></div>`, {kind:"settings"});
 }
 async function submitSettings(){
   const g=i=>document.getElementById(i).value.trim();
@@ -863,6 +865,16 @@ document.addEventListener("change", ev=>{
   fr.readAsText(ev.target.files[0]);
 });
 
+const APP_VERSION = "Version du 29/10/2026";
+async function refreshApp(){
+  toast("Mise à jour de l'appli…");
+  try{
+    if(navigator.serviceWorker){ const regs=await navigator.serviceWorker.getRegistrations(); for(const g of regs){ try{ await g.update(); }catch(e){} } }
+    if(window.caches){ const ks=await caches.keys(); await Promise.all(ks.map(k=>caches.delete(k))); }
+  }catch(e){}
+  const u=new URL(location.href); u.searchParams.set("v", Date.now()); location.replace(u.toString());
+}
+
 /* ---------- Confirmations intégrées ---------- */
 function askDelete(label, onYes){
   const z=document.getElementById("del-zone"); if(!z) return;
@@ -902,6 +914,7 @@ document.addEventListener("click", async ev=>{
     case "pdf": makePdf(ds.client, ds.month); break;
     case "print": window.print(); break;
     case "export": exportData(); break;
+    case "refresh": refreshApp(); break;
     case "import": document.getElementById("import-file").click(); break;
     case "copy-doc": copyDoc(ds.client, ds.month); break;
     case "save-end": saveEnd(true); break;
