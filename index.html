@@ -309,6 +309,7 @@ function viewChrono(){
   Object.keys(S.clients).forEach(id=>{ const c=compute(id,mk); mMin+=c.minutes; mTot+=c.total; });
   const today = rdvsBetween(startOfDay(Date.now()), startOfDay(Date.now())+86400000);
   const sel = ch.clientId && S.clients[ch.clientId] ? ch.clientId : "";
+  const next = rdvsBetween(startOfDay(Date.now())+86400000, Infinity).slice(0,3);
   const recent = Object.entries(S.seances).map(([id,s])=>({id,...s})).sort((a,b)=>b.debut-a.debut).slice(0,5);
   return `
   <div class="top">
@@ -345,11 +346,17 @@ function viewChrono(){
   <div class="card">
     <div class="row"><h2 class="grow">Aujourd'hui</h2><button class="btn-ghost" data-tab="planning">Planning</button></div>
     ${today.length ? `<div class="list">${today.map(rv=>`
-      <button class="item tappable" data-act="pick-rdv" data-client="${rv.clientId}">
+      <button class="item tappable" data-act="edit-rdv" data-id="${rv.id}">
         <div class="num" style="width:3.4em;font-weight:500">${esc(rv.heure||"")}</div>
         <div class="grow"><div class="item-title">${esc(clientName(S.clients[rv.clientId]))}</div>${rv.note?`<div class="small muted">${esc(rv.note)}</div>`:""}</div>
-        <span class="small muted">Choisir</span>
+        <span class="small muted">Ouvrir</span>
       </button>`).join("")}</div>` : `<div class="empty">Rien de prévu aujourd'hui.</div>`}
+    ${next.length ? `<div class="eyebrow" style="margin-top:4px">Prochains passages</div><div class="list">${next.map(rv=>`
+      <button class="item tappable" data-act="edit-rdv" data-id="${rv.id}">
+        <div class="num small" style="width:6.5em">${esc(dayLabel(rv.ts))}</div>
+        <div class="grow"><div class="item-title">${esc(clientName(S.clients[rv.clientId]))}</div></div>
+        <div class="num small muted">${esc(rv.heure||"")}</div><span class="chev">›</span>
+      </button>`).join("")}</div>` : ""}
   </div>
   <div class="stats">
     <div class="stat"><b>${dur(mMin)}</b><span>travaillées ce mois</span></div>
@@ -436,21 +443,34 @@ const startOfDay = ms => { const d=new Date(ms); d.setHours(0,0,0,0); return d.g
 function rdvsBetween(a,b){
   return Object.entries(S.rdv).map(([id,r])=>({id,...r})).filter(r=>r.ts>=a && r.ts<b).sort((x,y)=>x.ts-y.ts);
 }
-function viewPlanning(){
-  const from=startOfDay(Date.now()), to=from+35*86400000;
-  const list=rdvsBetween(from,to);
+function rdvItem(r){
+  const later = r.serie ? Object.values(S.rdv).filter(x=>x.serie===r.serie).length : 0;
+  return `<button class="item tappable" data-act="edit-rdv" data-id="${r.id}">
+    <div class="num" style="width:3.4em;font-weight:500">${esc(r.heure||"")}</div>
+    <div class="grow"><div class="item-title">${esc(clientName(S.clients[r.clientId]))}</div><div class="small muted">${[r.duree?dur(r.duree)+" prévues":"", r.note||"", later>1?"série":""].filter(Boolean).map(esc).join(" · ")}</div></div>
+    <span class="small muted">Modifier</span></button>`;
+}
+function dayCards(list, today){
   const groups={}; list.forEach(r=>{ const k=startOfDay(r.ts); (groups[k]=groups[k]||[]).push(r); });
   const keys=Object.keys(groups).map(Number).sort((a,b)=>a-b);
+  let lastM="", out="";
+  keys.forEach(k=>{
+    const m=monthKey(k);
+    if(m!==lastM){ out+=`<h2 style="text-transform:capitalize;margin-top:4px">${esc(monthLabel(m))}</h2>`; lastM=m; }
+    out+=`<div class="card"><div class="eyebrow">${k===today?"Aujourd'hui":esc(dayLong(k))}</div><div class="list">${groups[k].map(rdvItem).join("")}</div></div>`;
+  });
+  return out;
+}
+function viewPlanning(){
+  const today=startOfDay(Date.now());
+  const future=rdvsBetween(today, Infinity);
+  const past=rdvsBetween(-Infinity, today).reverse();
   return `
-  <div class="top"><h1>Planning</h1><button class="btn-primary" data-act="new-rdv">＋ Prévoir</button></div>
-  ${keys.length? keys.map(k=>`
-    <div class="card"><div class="eyebrow">${k===from?"Aujourd'hui":esc(dayLong(k))}</div>
-      <div class="list">${groups[k].map(r=>`
-        <button class="item tappable" data-act="edit-rdv" data-id="${r.id}">
-          <div class="num" style="width:3.4em;font-weight:500">${esc(r.heure||"")}</div>
-          <div class="grow"><div class="item-title">${esc(clientName(S.clients[r.clientId]))}</div><div class="small muted">${r.duree?esc(dur(r.duree))+" prévues":""}${r.duree&&r.note?" · ":""}${esc(r.note||"")}</div></div>
-          <span class="chev">›</span></button>`).join("")}</div></div>`).join("")
-  : `<div class="card"><div class="empty">Aucun passage prévu sur les 5 prochaines semaines.<br>Touchez « Prévoir » pour en ajouter.</div></div>`}`;
+  <div class="top"><h1>Planning</h1><button class="btn-primary" data-act="new-rdv">+ Prévoir</button></div>
+  ${future.length ? dayCards(future, today)
+    : `<div class="card"><div class="empty">Aucun passage prévu.<br>Touche « Prévoir » pour en ajouter.</div></div>`}
+  ${past.length ? `<button data-act="toggle-past">${UI.showPast?"Masquer":"Voir"} les passages passés (${past.length})</button>
+    ${UI.showPast ? `<div style="display:flex;flex-direction:column;gap:18px;opacity:.75">${dayCards(past.slice(0,60), today)}</div>` : ""}` : ""}`;
 }
 
 /* ---------- Vue Récap ---------- */
@@ -482,7 +502,7 @@ function viewRecap(){
     : `<div class="empty">Aucune séance ce mois-ci.</div>`}
   </div>
   ${planned.length?`<div class="card"><h2>Passages prévus</h2><div class="list">${planned.map(r=>`
-    <div class="item"><div class="num small" style="width:6.5em">${esc(dayLabel(r.ts))}</div><div class="grow">${esc(clientName(S.clients[r.clientId]))}</div><div class="num small muted">${esc(r.heure||"")}</div></div>`).join("")}</div></div>`:""}`;
+    <button class="item tappable" data-act="edit-rdv" data-id="${r.id}"><div class="num small" style="width:6.5em">${esc(dayLabel(r.ts))}</div><div class="grow">${esc(clientName(S.clients[r.clientId]))}</div><div class="num small muted">${esc(r.heure||"")}</div><span class="chev">›</span></button>`).join("")}</div></div>`:""}`;
 }
 
 function renderMain(){
@@ -651,31 +671,57 @@ function openMonthSheet(cid, mk){
 }
 
 /* Rendez-vous */
+function serieLater(id){
+  const r=S.rdv[id]; if(!r||!r.serie) return [];
+  return Object.entries(S.rdv).map(([k,v])=>({id:k,...v})).filter(x=>x.serie===r.serie && x.id!==id && x.ts>r.ts).sort((a,b)=>a.ts-b.ts);
+}
 function openRdvForm(id){
   const r = id? S.rdv[id] : {clientId:"", ts:startOfDay(Date.now()+86400000), heure:"09:00", duree:120, note:""};
+  const later = id ? serieLater(id) : [];
   openSheet(`${sheetHead(id?"Passage prévu":"Prévoir un passage")}
   <form id="rdv-form" style="display:flex;flex-direction:column;gap:12px">
+    ${id?`<button type="button" class="btn-primary" data-act="rdv-start" data-client="${esc(r.clientId)}">Démarrer le chrono pour ce client</button>`:""}
     <label for="r-client">Client<select id="r-client">${clientOptions(r.clientId,false)}</select></label>
     <div class="grid2"><label for="r-date">Date<input id="r-date" type="date" value="${dateInput(r.ts)}"></label>
     <label for="r-heure">Heure<input id="r-heure" type="time" value="${esc(r.heure||"09:00")}"></label></div>
     <label for="r-duree">Durée prévue<select id="r-duree">${[30,60,90,120,150,180,240,300,360,480].map(m=>`<option value="${m}" ${m===Number(r.duree)?"selected":""}>${dur(m)}</option>`).join("")}</select></label>
-    ${id?"":`<label for="r-rep">Répéter<select id="r-rep"><option value="0">Une seule fois</option><option value="7">Chaque semaine (8 semaines)</option><option value="14">Toutes les 2 semaines (8 fois)</option></select></label>`}
+    ${id?"":`<label for="r-rep">Répéter<select id="r-rep">
+      <option value="0">Une seule fois</option>
+      <option value="w1-8">Chaque semaine, 2 mois</option>
+      <option value="w1-26">Chaque semaine, 6 mois</option>
+      <option value="w2-13">Toutes les 2 semaines, 6 mois</option>
+      <option value="m1-12">Chaque mois, 1 an</option></select></label>`}
     <label for="r-note">Note<input id="r-note" value="${esc(r.note)}" placeholder="ex. vitres ce jour-là"></label>
-    <button class="btn-primary" type="submit">Enregistrer</button>
-    ${id?`<button type="button" data-act="rdv-start" data-client="${esc(r.clientId)}">Démarrer le chrono pour ce client</button><div id="del-zone"><button type="button" class="btn-ghost btn-danger" data-act="ask-del-rdv">Supprimer ce passage</button></div>`:""}
+    ${later.length?`<label for="r-serie" style="flex-direction:row;align-items:center;gap:10px;color:var(--ink);font-size:.95rem"><input type="checkbox" id="r-serie" style="width:22px;height:22px;min-height:0;accent-color:var(--accent)"> Appliquer aussi aux ${later.length} passages suivants de la série</label>`:""}
+    <button class="${id?"":"btn-primary"}" type="submit">Enregistrer</button>
+    ${id?`<div id="del-zone"><button type="button" class="btn-ghost btn-danger" data-act="ask-del-rdv">Supprimer ce passage</button></div>`:""}
   </form>`, {kind:"rdv", id});
 }
 async function submitRdv(){
   const g=i=>document.getElementById(i).value;
-  const cid=g("r-client"); if(!cid){ toast("Choisissez un client"); return; }
-  if(!g("r-date")){ toast("Choisissez une date"); return; }
+  const cid=g("r-client"); if(!cid){ toast("Choisis un client"); return; }
+  if(!g("r-date")){ toast("Choisis une date"); return; }
   const base={clientId:cid, heure:g("r-heure"), duree:Number(g("r-duree")), note:g("r-note").trim()};
   const ts=fromInputs(g("r-date"), g("r-heure"));
-  if(UI.sheet.id){ await put("rdv",UI.sheet.id,{...base, ts}); }
-  else {
-    const rep=Number((document.getElementById("r-rep")||{}).value||0);
-    const n=rep?8:1;
-    for(let i=0;i<n;i++){ const d=new Date(ts); d.setDate(d.getDate()+i*rep); await put("rdv",uid(),{...base, ts:d.getTime()}); }
+  const id=UI.sheet.id;
+  if(id){
+    const old=S.rdv[id]; const later=serieLater(id);
+    const shiftDays=Math.round((startOfDay(ts)-startOfDay(old.ts))/86400000);
+    await put("rdv",id,{...old, ...base, ts});
+    const box=document.getElementById("r-serie");
+    if(box && box.checked){
+      const [hh,mm]=(base.heure||"09:00").split(":").map(Number);
+      for(const x of later){ const d=new Date(x.ts); d.setDate(d.getDate()+shiftDays); d.setHours(hh,mm,0,0); const {id:xid,...rest}=x; await put("rdv",xid,{...rest, ...base, ts:d.getTime()}); }
+    }
+  } else {
+    const rep=(document.getElementById("r-rep")||{}).value||"0";
+    const serie = rep!=="0" ? uid() : null;
+    const [kind,n]= rep==="0" ? ["w",1] : [rep.slice(0,2), Number(rep.split("-")[1])];
+    for(let i=0;i<n;i++){
+      const d=new Date(ts);
+      if(kind==="m1") d.setMonth(d.getMonth()+i); else d.setDate(d.getDate()+i*(kind==="w2"?14:7));
+      await put("rdv",uid(),{...base, ts:d.getTime(), ...(serie?{serie}:{})});
+    }
   }
   closeSheet(); toast("Planning mis à jour");
 }
@@ -868,7 +914,13 @@ document.addEventListener("click", async ev=>{
     case "month": UI.month=shiftMonth(UI.month, Number(ds.d)); renderMain(); break;
     case "ask-del-client": { const id=UI.sheet.id; askDelete("Supprimer la fiche ? Les séances déjà enregistrées restent dans l'historique.", async()=>{ await del("clients",id); closeSheet(); UI.clientDetail=null; renderMain(); toast("Client supprimé"); }); break; }
     case "ask-del-seance": { const id=UI.sheet.id, back=UI.sheet.back; askDelete("Supprimer définitivement cette séance ?", async()=>{ await del("seances",id); closeSheet(); toast("Séance supprimée"); if(back) openMonthSheet(back.cid, back.mk); }); break; }
-    case "ask-del-rdv": { const id=UI.sheet.id; askDelete("Supprimer ce passage prévu ?", async()=>{ await del("rdv",id); closeSheet(); toast("Passage supprimé"); }); break; }
+    case "ask-del-rdv": {
+      const id=UI.sheet.id, later=serieLater(id);
+      askDelete("Supprimer ce passage prévu ?", async()=>{ await del("rdv",id); closeSheet(); toast("Passage supprimé"); });
+      if(later.length){ const z=document.querySelector("#del-zone .confirm .row"); if(z) z.insertAdjacentHTML("beforebegin", `<button type="button" class="btn-danger" data-act="del-serie">Supprimer aussi les ${later.length} suivants</button>`); }
+      break; }
+    case "del-serie": { const id=UI.sheet.id, later=serieLater(id); for(const x of later) await del("rdv",x.id); await del("rdv",id); closeSheet(); toast("Passages supprimés"); break; }
+    case "toggle-past": UI.showPast=!UI.showPast; renderMain(); break;
     case "yes-del": if(UI.sheet && UI.sheet.onYes) UI.sheet.onYes(); break;
     case "no-del": { const z=document.getElementById("del-zone"); if(z) z.innerHTML=`<button type="button" class="btn-ghost btn-danger" data-act="${UI.sheet.kind==="client"?"ask-del-client":UI.sheet.kind==="seance"?"ask-del-seance":UI.sheet.kind==="running"?"ask-del-running":"ask-del-rdv"}">Supprimer</button>`; break; }
   }
