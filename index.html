@@ -309,6 +309,7 @@ function viewChrono(){
   Object.keys(S.clients).forEach(id=>{ const c=compute(id,mk); mMin+=c.minutes; mTot+=c.total; });
   const today = rdvsBetween(startOfDay(Date.now()), startOfDay(Date.now())+86400000);
   const sel = ch.clientId && S.clients[ch.clientId] ? ch.clientId : "";
+  const recent = Object.entries(S.seances).map(([id,s])=>({id,...s})).sort((a,b)=>b.debut-a.debut).slice(0,5);
   return `
   <div class="top">
     <div><div class="eyebrow">${esc(dayLong(Date.now()))}</div><h1>${hello} ${esc(r.nom)}</h1></div>
@@ -335,6 +336,7 @@ function viewChrono(){
         <button class="btn-primary" data-act="start" ${ch.running?"disabled":""}>Début</button>
         <button class="btn-fin" data-act="stop" ${ch.running?"":"disabled"}>Fin</button>
       </div>
+      ${ch.running?`<button class="btn-ghost" data-act="edit-running">Modifier l'intervention en cours</button>`:""}
     </div>
   </div>
   <div class="row">
@@ -352,6 +354,14 @@ function viewChrono(){
   <div class="stats">
     <div class="stat"><b>${dur(mMin)}</b><span>travaillées ce mois</span></div>
     <div class="stat"><b>${eur(mTot)}</b><span>facturé ce mois</span></div>
+  </div>
+  <div class="card">
+    <div class="row"><h2 class="grow">Dernières interventions</h2><button class="btn-ghost" data-tab="recap">Tout voir</button></div>
+    ${recent.length ? `<div class="list">${recent.map(s=>`
+      <button class="item tappable" data-act="edit-seance" data-id="${s.id}">
+        <div class="grow"><div class="item-title">${esc(clientName(S.clients[s.clientId]))}</div><div class="small muted num">${esc(dayLabel(s.debut))} · ${hm(s.debut)} – ${hm(s.fin)}${s.note?" · "+esc(s.note):""}</div></div>
+        <div class="num">${dur(billedMin(s))}</div><span class="small muted">Modifier</span></button>`).join("")}</div>`
+      : `<div class="empty">Tes interventions enregistrées apparaîtront ici.</div>`}
   </div>`;
 }
 
@@ -547,15 +557,49 @@ function openEndSheet(){
     <div><div class="eyebrow">${esc(clientName(S.clients[p.clientId]))}</div>
     <div style="font-size:2rem;font-weight:300" class="num">${dur(min)}</div>
     <div class="muted small">${esc(dayLabel(p.debut))}, de ${hm(p.debut)} à ${hm(p.fin)}${reglages().arrondi? " · facturé "+dur(billedMin(p)) : ""}</div></div>
+    <div class="grid2"><label for="end-deb">Début<input id="end-deb" type="time" value="${timeInput(p.debut)}"></label>
+    <label for="end-fin">Fin<input id="end-fin" type="time" value="${timeInput(p.fin)}"></label></div>
+    <div class="hint">Corrige les heures si besoin avant d'enregistrer.</div>
     <label for="end-note">Note (facultatif)<input id="end-note" placeholder="ex. repassage en plus"></label>
     <button class="btn-primary" data-act="save-end">Enregistrer la séance</button>
     <button class="btn-ghost btn-danger" data-act="discard-end">Ne pas enregistrer</button>`, {kind:"end"});
 }
 async function saveEnd(keep){
   const ch=chrono(), p=ch.pending; if(!p){closeSheet();return;}
-  if(keep){ const note=(document.getElementById("end-note")||{}).value||""; await put("seances",uid(),{clientId:p.clientId, debut:p.debut, fin:p.fin, note:note.trim()}); toast("Séance enregistrée"); }
+  if(keep){
+    const note=(document.getElementById("end-note")||{}).value||"";
+    const vd=(document.getElementById("end-deb")||{}).value, vf=(document.getElementById("end-fin")||{}).value;
+    const day=dateInput(p.debut);
+    let debut = vd ? fromInputs(day, vd) : p.debut;
+    let fin = vf ? fromInputs(day, vf) : p.fin;
+    if(fin<=debut) fin+=86400000;
+    await put("seances",uid(),{clientId:p.clientId, debut, fin, note:note.trim()}); toast("Séance enregistrée");
+  }
   await put("config","chrono",{running:false, clientId:p.clientId});
   closeSheet();
+}
+
+/* Intervention en cours */
+function openRunningForm(){
+  const ch=chrono(); if(!ch.running) return;
+  openSheet(`${sheetHead("Intervention en cours")}
+  <form id="running-form" style="display:flex;flex-direction:column;gap:12px">
+    <label for="run-client">Client<select id="run-client">${clientOptions(ch.clientId,false)}</select></label>
+    <div class="grid2"><label for="run-date">Date de début<input id="run-date" type="date" value="${dateInput(ch.debut)}"></label>
+    <label for="run-deb">Heure de début<input id="run-deb" type="time" value="${timeInput(ch.debut)}"></label></div>
+    <div class="hint">Pratique si tu as oublié de lancer le chrono en arrivant. Le chrono continue de tourner.</div>
+    <button class="btn-primary" type="submit">Enregistrer</button>
+    <div id="del-zone"><button type="button" class="btn-ghost btn-danger" data-act="ask-del-running">Annuler cette intervention</button></div>
+  </form>`, {kind:"running"});
+}
+async function submitRunning(){
+  const g=i=>document.getElementById(i).value;
+  const cid=g("run-client"); if(!cid){ toast("Choisis un client"); return; }
+  if(!g("run-date")||!g("run-deb")){ toast("Date et heure requises"); return; }
+  const debut=fromInputs(g("run-date"), g("run-deb"));
+  if(debut>Date.now()){ toast("L'heure de début est dans le futur"); return; }
+  await put("config","chrono",{...chrono(), running:true, clientId:cid, debut});
+  closeSheet(); toast("Intervention modifiée");
 }
 
 /* Séance (ajout / correction) */
@@ -804,7 +848,9 @@ document.addEventListener("click", async ev=>{
       ["horaire","forfait","prestation"].forEach(k=>document.getElementById("f-"+k).hidden = k!==ds.v);
       break;
     case "add-seance": { const back = ds.month? {cid:ds.client, mk:ds.month} : null; openSeanceForm(null, ds.client); UI.sheet.back=back; break; }
-    case "edit-seance": openSeanceForm(ds.id); UI.sheet.back={cid:ds.client, mk:ds.month}; break;
+    case "edit-seance": openSeanceForm(ds.id); UI.sheet.back = ds.month ? {cid:ds.client, mk:ds.month} : null; break;
+    case "edit-running": openRunningForm(); break;
+    case "ask-del-running": askDelete("Annuler l'intervention en cours ? Le temps déjà compté ne sera pas enregistré.", async()=>{ const ch=chrono(); await put("config","chrono",{running:false, clientId:ch.clientId}); closeSheet(); toast("Intervention annulée"); }); break;
     case "open-month": openMonthSheet(ds.client, ds.month); break;
     case "show-doc": openDoc(ds.client, ds.month); break;
     case "pdf": makePdf(ds.client, ds.month); break;
@@ -824,7 +870,7 @@ document.addEventListener("click", async ev=>{
     case "ask-del-seance": { const id=UI.sheet.id, back=UI.sheet.back; askDelete("Supprimer définitivement cette séance ?", async()=>{ await del("seances",id); closeSheet(); toast("Séance supprimée"); if(back) openMonthSheet(back.cid, back.mk); }); break; }
     case "ask-del-rdv": { const id=UI.sheet.id; askDelete("Supprimer ce passage prévu ?", async()=>{ await del("rdv",id); closeSheet(); toast("Passage supprimé"); }); break; }
     case "yes-del": if(UI.sheet && UI.sheet.onYes) UI.sheet.onYes(); break;
-    case "no-del": { const z=document.getElementById("del-zone"); if(z) z.innerHTML=`<button type="button" class="btn-ghost btn-danger" data-act="${UI.sheet.kind==="client"?"ask-del-client":UI.sheet.kind==="seance"?"ask-del-seance":"ask-del-rdv"}">Supprimer</button>`; break; }
+    case "no-del": { const z=document.getElementById("del-zone"); if(z) z.innerHTML=`<button type="button" class="btn-ghost btn-danger" data-act="${UI.sheet.kind==="client"?"ask-del-client":UI.sheet.kind==="seance"?"ask-del-seance":UI.sheet.kind==="running"?"ask-del-running":"ask-del-rdv"}">Supprimer</button>`; break; }
   }
 });
 document.addEventListener("change", async ev=>{
@@ -842,6 +888,7 @@ document.addEventListener("submit", ev=>{
   else if(id==="seance-form") submitSeance();
   else if(id==="rdv-form") submitRdv();
   else if(id==="settings-form") submitSettings();
+  else if(id==="running-form") submitRunning();
 });
 
 let toastT=null;
