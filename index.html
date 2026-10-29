@@ -1,0 +1,866 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Carnet de Sandra</title>
+<meta name="theme-color" content="#EEF2EF">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Carnet">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Figtree:wght@300;400;500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+/* Layout: one calm column, bottom tab bar, the timer ring as the single focal point */
+:root{
+  --bg:#EEF2EF; --surface:#FFFFFF; --ink:#1E2925; --muted:#66756F; --line:#D9E1DC;
+  --accent:#2E6A5C; --accent-soft:#DCEAE4; --on-accent:#FFFFFF;
+  --ok:#2E7D4F; --ok-soft:#DFF0E5; --warn:#A2611A; --warn-soft:#F6E8D6; --danger:#B03A33;
+  --paper:#FFFFFF; --paper-ink:#1E2925;
+  --f-display:"Instrument Serif", Georgia, "Times New Roman", serif;
+  --f-body:"Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --r:14px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111816; --surface:#19221F; --ink:#E4ECE8; --muted:#93A39C; --line:#2A3632;
+  --accent:#7EC2AF; --accent-soft:#1F332D; --on-accent:#0E1A16;
+  --ok:#7ACB99; --ok-soft:#1C3326; --warn:#E3A867; --warn-soft:#3A2B1A; --danger:#EC8A82;
+  color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#111816; --surface:#19221F; --ink:#E4ECE8; --muted:#93A39C; --line:#2A3632;
+  --accent:#7EC2AF; --accent-soft:#1F332D; --on-accent:#0E1A16;
+  --ok:#7ACB99; --ok-soft:#1C3326; --warn:#E3A867; --warn-soft:#3A2B1A; --danger:#EC8A82;
+  color-scheme:dark }
+*{box-sizing:border-box}
+html{color-scheme:light;padding-top:env(safe-area-inset-top,0px)}
+[hidden]{display:none!important}
+img{max-width:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.45;-webkit-tap-highlight-color:transparent}
+.wrap{max-width:560px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:18px 110px;display:flex;flex-direction:column;gap:18px}
+h1,h2{font-family:var(--f-display);font-weight:400;margin:0;text-wrap:balance}
+h1{font-size:2rem;line-height:1.1}
+h2{font-size:1.45rem}
+.eyebrow{font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.muted{color:var(--muted)}
+.small{font-size:.875rem}
+.num{font-variant-numeric:tabular-nums}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px}
+.row{display:flex;gap:10px;align-items:center}
+.row.wrapx{flex-wrap:wrap}
+.grow{flex:1;min-width:0}
+label{font-size:.85rem;color:var(--muted);font-weight:500;display:flex;flex-direction:column;gap:6px}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;width:100%;min-height:46px}
+textarea{min-height:80px;resize:vertical}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button,.btn{font:inherit;font-weight:500;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:12px;padding:12px 16px;min-height:46px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn-ghost{background:transparent;border-color:transparent;color:var(--accent)}
+.btn-danger{color:var(--danger)}
+button:disabled{opacity:.38;cursor:default}
+.icon-btn{min-height:42px;width:42px;padding:0;border-radius:50%}
+
+/* Timer */
+.timer{display:flex;flex-direction:column;align-items:center;gap:20px;padding-block:8px}
+.ring{position:relative;width:min(74vw,270px);aspect-ratio:1;max-width:100%;display:grid;place-items:center}
+.ring svg{position:absolute;inset:0;width:100%;height:100%}
+.ring .track{stroke:var(--line)}
+.ring .prog{stroke:var(--accent);transition:stroke-dashoffset .6s linear}
+.ring .halo{fill:var(--accent-soft);opacity:0;transform-origin:center}
+.running .ring .halo{opacity:1;animation:breathe 5s ease-in-out infinite}
+@keyframes breathe{0%,100%{transform:scale(.86)}50%{transform:scale(.93)}}
+@media (prefers-reduced-motion:reduce){.running .ring .halo{animation:none;transform:scale(.9)}}
+.time{position:relative;font-weight:300;font-size:clamp(2.6rem,13vw,3.6rem);letter-spacing:.01em;font-variant-numeric:tabular-nums;line-height:1}
+.time-sub{position:relative;font-size:.85rem;color:var(--muted);text-align:center;margin-top:8px}
+.ring-inner{display:flex;flex-direction:column;align-items:center}
+.timer-btns{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%}
+.timer-btns button{min-height:60px;font-size:1.1rem;border-radius:16px}
+.btn-fin{border-color:var(--ink)}
+
+/* Lists */
+.list{display:flex;flex-direction:column}
+.item{display:flex;gap:12px;align-items:center;padding:12px 0;border-top:1px solid var(--line);min-width:0}
+.item:first-child{border-top:0}
+.item .grow > *{overflow:hidden;text-overflow:ellipsis}
+.item-title{font-weight:500}
+.pill{font-size:.75rem;font-weight:600;padding:4px 10px;border-radius:99px;white-space:nowrap}
+.pill-ok{background:var(--ok-soft);color:var(--ok)}
+.pill-warn{background:var(--warn-soft);color:var(--warn)}
+.pill-neutral{background:var(--accent-soft);color:var(--accent)}
+.tappable{cursor:pointer;background:none;border:0;border-top:1px solid var(--line);border-radius:0;text-align:left;width:100%;padding:12px 0;min-height:0;color:inherit;font-weight:400}
+.item.tappable:first-child{border-top:0}
+.chev{color:var(--muted)}
+.empty{color:var(--muted);text-align:center;padding:18px 8px;font-size:.95rem}
+
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.stat b{display:block;font-size:1.35rem;font-weight:500;font-variant-numeric:tabular-nums}
+.stat span{font-size:.8rem;color:var(--muted)}
+.month-nav{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.month-nav h2{text-transform:capitalize}
+
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border-radius:99px;padding:8px 14px;min-height:38px;font-size:.9rem;font-weight:400}
+.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:500}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:4px}
+.seg button{border:0;background:transparent;min-height:40px;padding:6px;font-size:.88rem;border-radius:9px}
+.seg button[aria-pressed="true"]{background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.12);color:var(--accent)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.hint{font-size:.82rem;color:var(--muted)}
+
+/* Bottom nav */
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+nav.tabs button{border:0;border-radius:0;background:transparent;flex-direction:column;gap:3px;font-size:.75rem;color:var(--muted);min-height:62px;padding:6px 2px}
+nav.tabs button[aria-current="page"]{color:var(--accent);font-weight:600}
+nav.tabs svg{width:22px;height:22px}
+
+/* Sheet */
+.sheet-bg{position:fixed;inset:0;z-index:40;background:rgba(10,18,15,.45);display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--surface);width:100%;max-width:600px;max-height:92%;overflow-y:auto;border-radius:20px 20px 0 0;padding-block:18px calc(22px + env(safe-area-inset-bottom,0px));padding-left:max(18px,env(safe-area-inset-left,0px));padding-right:max(18px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.confirm{background:var(--warn-soft);color:var(--ink);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px}
+
+/* Récapitulatif papier */
+.paper{background:var(--paper);color:var(--paper-ink);border-radius:6px;padding:22px 18px;border:1px solid var(--line);font-size:.9rem;color-scheme:light}
+.paper h3{font-family:var(--f-display);font-weight:400;font-size:1.6rem;margin:0 0 2px}
+.paper .p-muted{color:#5f6d67}
+.paper table{width:100%;border-collapse:collapse;margin-top:14px;font-variant-numeric:tabular-nums}
+.paper th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:#5f6d67;text-align:left;font-weight:600;border-bottom:1px solid #cfd8d3;padding:6px 4px}
+.paper td{border-bottom:1px solid #e6ece9;padding:7px 4px;vertical-align:top}
+.paper .r{text-align:right}
+.paper .tot td{border:0;padding-top:6px}
+.paper .grand td{font-weight:600;font-size:1rem;border-top:1.5px solid #1E2925;padding-top:10px}
+.table-scroll{overflow-x:auto}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(78px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:99px;font-size:.9rem;z-index:60;max-width:90%}
+.banner{background:var(--warn-soft);color:var(--ink);border-radius:12px;padding:10px 12px;font-size:.85rem}
+@media print{
+  @page{size:A4;margin:16mm}
+  body{background:#fff!important}
+  #app,#tabs,#toast-root,.sheet-head,.sheet > button,.sheet > .row{display:none!important}
+  .sheet-bg{position:static;background:none;display:block}
+  .sheet{max-height:none;overflow:visible;padding:0;border-radius:0;box-shadow:none}
+  .paper{border:0;padding:0;font-size:11pt}
+}
+</style>
+</head>
+<body>
+
+<div id="app" class="wrap"></div>
+<nav class="tabs" id="tabs" aria-label="Navigation"></nav>
+<div id="sheet-root"></div>
+<div id="toast-root"></div>
+
+<script>
+(() => {
+"use strict";
+/* ---------- Données ---------- */
+const COLS = ["clients","seances","rdv","paiements","config"];
+const S = {clients:{},seances:{},rdv:{},paiements:{},config:{}};
+let offline = false, loaded = false;
+const LSKEY = "carnet-sandra-v1";
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+function saveLocal(){ try{ localStorage.setItem(LSKEY, JSON.stringify(S)); }catch(e){ toast("Mémoire du téléphone pleine : faites une sauvegarde."); } }
+function loadLocal(){ try{ const j = JSON.parse(localStorage.getItem(LSKEY)||"null"); if(j) COLS.forEach(c=>S[c]=j[c]||{}); }catch(e){} }
+
+async function put(col,id,data){
+  S[col][id] = data; renderMain();
+  saveLocal();
+}
+async function del(col,id){
+  delete S[col][id]; renderMain();
+  saveLocal();
+}
+function errMsg(e){
+  if(e && e.code==="quota_exceeded") return "Espace de stockage plein : supprimez d'anciennes séances.";
+  if(e && e.code==="invalid_argument") return "Vous n'avez pas le droit de modifier ces données.";
+  return "Enregistrement impossible pour l'instant. Réessayez.";
+}
+
+/* ---------- Réglages & chrono ---------- */
+const reglages = () => Object.assign({nom:"Sandra", spotify:"", arrondi:0}, S.config.reglages||{});
+const chrono = () => S.config.chrono || {running:false};
+
+/* ---------- Utilitaires ---------- */
+const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const eurF = new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"});
+const eur = n => eurF.format(Math.round((n||0)*100)/100);
+const pad = n => String(n).padStart(2,"0");
+const monthKey = ms => { const d=new Date(ms); return d.getFullYear()+"-"+pad(d.getMonth()+1); };
+const monthLabel = k => { const [y,m]=k.split("-").map(Number); return new Date(y,m-1,1).toLocaleDateString("fr-FR",{month:"long",year:"numeric"}); };
+const shiftMonth = (k,n) => { const [y,m]=k.split("-").map(Number); const d=new Date(y,m-1+n,1); return d.getFullYear()+"-"+pad(d.getMonth()+1); };
+const hm = ms => { const d=new Date(ms); return pad(d.getHours())+"h"+pad(d.getMinutes()); };
+const dayLabel = ms => new Date(ms).toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"});
+const dayLong = ms => new Date(ms).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
+const dateInput = ms => { const d=new Date(ms); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); };
+const timeInput = ms => { const d=new Date(ms); return pad(d.getHours())+":"+pad(d.getMinutes()); };
+const fromInputs = (date,time) => { const [y,m,d]=date.split("-").map(Number); const [h,mi]=(time||"00:00").split(":").map(Number); return new Date(y,m-1,d,h,mi).getTime(); };
+function dur(min){ min=Math.round(min); const h=Math.floor(min/60), m=min%60; return h? (h+" h"+(m?" "+pad(m):"")) : (m+" min"); }
+function clock(ms){ const s=Math.max(0,Math.floor(ms/1000)); return pad(Math.floor(s/3600))+":"+pad(Math.floor(s/60)%60)+":"+pad(s%60); }
+const num = v => { const n=parseFloat(String(v).replace(",",".")); return isFinite(n)?n:0; };
+const clientName = c => c ? [c.prenom,c.nom].filter(Boolean).join(" ") || "Sans nom" : "Client supprimé";
+const sortedClients = () => Object.entries(S.clients).map(([id,c])=>({id,...c})).sort((a,b)=>clientName(a).localeCompare(clientName(b),"fr"));
+
+/* ---------- Calculs ---------- */
+function billedMin(s){
+  const raw = Math.max(0,(s.fin - s.debut)/60000);
+  const a = Number(reglages().arrondi)||0;
+  if(!a) return Math.round(raw);
+  return Math.max(a, Math.round(raw/a)*a);
+}
+function seancesOf(clientId, mk){
+  return Object.entries(S.seances).map(([id,s])=>({id,...s}))
+    .filter(s=>s.clientId===clientId && (!mk || monthKey(s.debut)===mk))
+    .sort((a,b)=>a.debut-b.debut);
+}
+function tarifLabel(c){
+  const t=c.tarif||{};
+  if(t.type==="forfait") return eur(t.montant)+" / mois pour "+(t.heures||0)+" h"+(t.tauxSup?", puis "+eur(t.tauxSup)+"/h":"");
+  if(t.type==="prestation") return eur(t.prix)+" par passage";
+  return eur(t.taux)+" / heure";
+}
+function compute(clientId, mk){
+  const c = S.clients[clientId]||{}; const t=c.tarif||{type:"horaire"};
+  const list = seancesOf(clientId, mk);
+  const minutes = list.reduce((a,s)=>a+billedMin(s),0);
+  const heures = minutes/60, n=list.length;
+  const depl = num(c.deplacement)*n;
+  const lines = [];
+  let base = 0;
+  if(n){
+    if(t.type==="forfait"){
+      base = num(t.montant);
+      lines.push({label:"Forfait mensuel ("+(num(t.heures))+" h incluses)", montant:base});
+      const sup = Math.max(0, heures - num(t.heures));
+      if(sup>0 && num(t.tauxSup)){ lines.push({label:"Heures en plus : "+dur(sup*60)+" × "+eur(t.tauxSup), montant:sup*num(t.tauxSup)}); base += sup*num(t.tauxSup); }
+    } else if(t.type==="prestation"){
+      base = n*num(t.prix);
+      lines.push({label:n+" passage"+(n>1?"s":"")+" × "+eur(t.prix), montant:base});
+    } else {
+      base = heures*num(t.taux);
+      lines.push({label:dur(minutes)+" × "+eur(t.taux)+"/h", montant:base});
+    }
+    if(depl) lines.push({label:"Déplacements : "+n+" × "+eur(c.deplacement), montant:depl});
+  }
+  const total = base + depl;
+  return {list, minutes, n, total, lines};
+}
+const payKey = (cid,mk) => cid+"_"+mk;
+const isPaid = (cid,mk) => !!(S.paiements[payKey(cid,mk)]||{}).paye;
+function monthsOf(cid){ return [...new Set(seancesOf(cid).map(s=>monthKey(s.debut)))].sort(); }
+function arrears(cid, mk){
+  let sum=0; const months=[];
+  monthsOf(cid).filter(m=>m<mk).forEach(m=>{ if(!isPaid(cid,m)){ const t=compute(cid,m).total; if(t>0){sum+=t; months.push(m);} } });
+  return {sum, months};
+}
+async function setPaid(cid, mk, paid){
+  if(paid){
+    const todo = monthsOf(cid).filter(m=>m<=mk && !isPaid(cid,m));
+    if(!todo.includes(mk)) todo.push(mk);
+    for(const m of todo) await put("paiements", payKey(cid,m), {clientId:cid, mois:m, paye:true, le:Date.now()});
+    toast(todo.length>1 ? "Payé, mois précédents inclus" : "Marqué payé");
+  } else {
+    await del("paiements", payKey(cid,mk)); toast("Marqué à régler");
+  }
+}
+
+/* ---------- État d'interface ---------- */
+const UI = { view:"chrono", month: monthKey(Date.now()), clientDetail:null, sheet:null };
+const app = document.getElementById("app");
+const sheetRoot = document.getElementById("sheet-root");
+
+const ICONS = {
+  chrono:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M10 2h4"/></svg>',
+  clients:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5M16 4.8a3.3 3.3 0 0 1 0 6.4M18 14.8c1.8.7 3 2.4 3.5 5.2"/></svg>',
+  planning:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
+  recap:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h7"/></svg>',
+  gear:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+  music:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>',
+  back:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  prev:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  next:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>'
+};
+
+function renderTabs(){
+  const t=[["chrono","Chrono"],["clients","Clients"],["planning","Planning"],["recap","Récap"]];
+  document.getElementById("tabs").innerHTML = t.map(([k,l])=>`<button data-tab="${k}" ${UI.view===k?'aria-current="page"':""}>${ICONS[k]}<span>${l}</span></button>`).join("");
+}
+
+function clientOptions(selected, withNew){
+  const cs = sortedClients();
+  return `<option value="">${cs.length?"Choisir un client…":"Aucun client pour l'instant"}</option>` +
+    cs.map(c=>`<option value="${c.id}" ${c.id===selected?"selected":""}>${esc(clientName(c))}</option>`).join("") +
+    (withNew?`<option value="__new">＋ Nouveau client</option>`:"");
+}
+
+/* ---------- Vue Chrono ---------- */
+function viewChrono(){
+  const ch = chrono(), r=reglages();
+  const now = new Date();
+  const hello = now.getHours()<18 ? "Bonjour" : "Bonsoir";
+  const mk = monthKey(Date.now());
+  let mMin=0, mTot=0;
+  Object.keys(S.clients).forEach(id=>{ const c=compute(id,mk); mMin+=c.minutes; mTot+=c.total; });
+  const today = rdvsBetween(startOfDay(Date.now()), startOfDay(Date.now())+86400000);
+  const sel = ch.clientId && S.clients[ch.clientId] ? ch.clientId : "";
+  return `
+  <div class="top">
+    <div><div class="eyebrow">${esc(dayLong(Date.now()))}</div><h1>${hello} ${esc(r.nom)}</h1></div>
+    <button class="icon-btn" data-act="settings" aria-label="Réglages">${ICONS.gear}</button>
+  </div>
+  ${offline?'<div class="banner">Données gardées sur cet appareil uniquement (connexion au stockage en ligne indisponible).</div>':""}
+  <div class="card">
+    <label for="sel-client">Client
+      <select id="sel-client" ${ch.running?"disabled":""}>${clientOptions(sel,true)}</select>
+    </label>
+    <div class="timer ${ch.running?"running":""}">
+      <div class="ring" aria-live="off">
+        <svg viewBox="0 0 200 200" aria-hidden="true">
+          <circle class="halo" cx="100" cy="100" r="92"/>
+          <circle class="track" cx="100" cy="100" r="94" fill="none" stroke-width="3"/>
+          <circle class="prog" id="ring-prog" cx="100" cy="100" r="94" fill="none" stroke-width="3" stroke-linecap="round" stroke-dasharray="590.6" stroke-dashoffset="590.6" transform="rotate(-90 100 100)"/>
+        </svg>
+        <div class="ring-inner">
+          <div class="time" id="time">${clock(ch.running? Date.now()-ch.debut : 0)}</div>
+          <div class="time-sub" id="time-sub">${ch.running ? "Commencé à "+hm(ch.debut) : "Prêt"}</div>
+        </div>
+      </div>
+      <div class="timer-btns">
+        <button class="btn-primary" data-act="start" ${ch.running?"disabled":""}>Début</button>
+        <button class="btn-fin" data-act="stop" ${ch.running?"":"disabled"}>Fin</button>
+      </div>
+    </div>
+  </div>
+  <div class="row">
+    <a class="btn grow" id="music-link" href="${esc(r.spotify||"https://open.spotify.com/")}" target="_blank" rel="noopener">${ICONS.music} Mettre la musique</a>
+  </div>
+  <div class="card">
+    <div class="row"><h2 class="grow">Aujourd'hui</h2><button class="btn-ghost" data-tab="planning">Planning</button></div>
+    ${today.length ? `<div class="list">${today.map(rv=>`
+      <button class="item tappable" data-act="pick-rdv" data-client="${rv.clientId}">
+        <div class="num" style="width:3.4em;font-weight:500">${esc(rv.heure||"")}</div>
+        <div class="grow"><div class="item-title">${esc(clientName(S.clients[rv.clientId]))}</div>${rv.note?`<div class="small muted">${esc(rv.note)}</div>`:""}</div>
+        <span class="small muted">Choisir</span>
+      </button>`).join("")}</div>` : `<div class="empty">Rien de prévu aujourd'hui.</div>`}
+  </div>
+  <div class="stats">
+    <div class="stat"><b>${dur(mMin)}</b><span>travaillées ce mois</span></div>
+    <div class="stat"><b>${eur(mTot)}</b><span>facturé ce mois</span></div>
+  </div>`;
+}
+
+let tickTimer=null;
+function tick(){
+  const ch=chrono(); const el=document.getElementById("time"); if(!el) return;
+  if(!ch.running){ el.textContent=clock(0); return; }
+  const e = Date.now()-ch.debut;
+  el.textContent = clock(e);
+  const p=document.getElementById("ring-prog");
+  if(p){ const frac=(e%3600000)/3600000; p.setAttribute("stroke-dashoffset", String(590.6*(1-frac))); }
+}
+function manageTick(){
+  clearInterval(tickTimer); tickTimer=null;
+  if(chrono().running && UI.view==="chrono" && document.visibilityState==="visible"){ tick(); tickTimer=setInterval(tick,1000); }
+}
+document.addEventListener("visibilitychange", manageTick);
+
+async function startChrono(){
+  const cid = document.getElementById("sel-client").value;
+  if(!cid || cid==="__new"){ toast("Choisissez d'abord un client"); return; }
+  await put("config","chrono",{running:true, debut:Date.now(), clientId:cid});
+  manageTick();
+}
+async function stopChrono(){
+  const ch=chrono(); if(!ch.running) return;
+  const pending={clientId:ch.clientId, debut:ch.debut, fin:Date.now()};
+  await put("config","chrono",{running:false, clientId:ch.clientId, pending});
+  manageTick();
+  openEndSheet();
+}
+
+/* ---------- Vue Clients ---------- */
+function viewClients(){
+  if(UI.clientDetail && S.clients[UI.clientDetail]) return viewClientDetail(UI.clientDetail);
+  const cs=sortedClients();
+  return `
+  <div class="top"><h1>Clients</h1><button class="btn-primary" data-act="new-client">＋ Nouveau</button></div>
+  <div class="card">${cs.length? `<div class="list">${cs.map(c=>{
+      const ar = arrears(c.id, shiftMonth(monthKey(Date.now()),1)).sum;
+      return `<button class="item tappable" data-act="open-client" data-id="${c.id}">
+        <div class="grow"><div class="item-title">${esc(clientName(c))}</div><div class="small muted">${esc(tarifLabel(c))}</div></div>
+        ${ar>0?`<span class="pill pill-warn num">${eur(ar)} dû</span>`:`<span class="pill pill-ok">À jour</span>`}
+        <span class="chev">›</span></button>`;}).join("")}</div>`
+    : `<div class="empty">Ajoutez votre premier client avec le bouton « Nouveau ».</div>`}</div>`;
+}
+function viewClientDetail(id){
+  const c=S.clients[id];
+  const months = monthsOf(id).slice().reverse();
+  return `
+  <div class="row"><button class="icon-btn" data-act="back-clients" aria-label="Retour">${ICONS.back}</button><h1 class="grow">${esc(clientName(c))}</h1></div>
+  <div class="card">
+    ${c.adresse?`<div><div class="eyebrow">Adresse</div><div style="white-space:pre-line">${esc(c.adresse)}</div></div>`:""}
+    ${c.tel?`<div><div class="eyebrow">Téléphone</div><div class="row"><span class="num" style="user-select:all">${esc(c.tel)}</span><a class="btn-ghost btn" href="tel:${esc(c.tel.replace(/\s/g,""))}">Appeler</a></div></div>`:""}
+    <div><div class="eyebrow">Tarif</div><div>${esc(tarifLabel(c))}${num(c.deplacement)?" · déplacement "+eur(c.deplacement):""}</div></div>
+    ${(c.taches||[]).length?`<div><div class="eyebrow">Tâches</div><div class="chips" style="margin-top:6px">${c.taches.map(t=>`<span class="pill pill-neutral">${esc(t)}</span>`).join("")}</div></div>`:""}
+    ${c.commentaire?`<div><div class="eyebrow">Commentaire</div><div style="white-space:pre-line">${esc(c.commentaire)}</div></div>`:""}
+    <div class="row wrapx"><button data-act="edit-client" data-id="${id}">Modifier la fiche</button><button data-act="add-seance" data-client="${id}">Ajouter une séance</button></div>
+  </div>
+  <div class="card"><h2>Historique</h2>
+    ${months.length?`<div class="list">${months.map(m=>{const r=compute(id,m); const p=isPaid(id,m); return `
+      <button class="item tappable" data-act="open-month" data-client="${id}" data-month="${m}">
+        <div class="grow"><div class="item-title" style="text-transform:capitalize">${esc(monthLabel(m))}</div><div class="small muted num">${r.n} séance${r.n>1?"s":""} · ${dur(r.minutes)}</div></div>
+        <div class="num" style="font-weight:500">${eur(r.total)}</div>
+        <span class="pill ${p?"pill-ok":"pill-warn"}">${p?"Payé":"À régler"}</span></button>`;}).join("")}</div>`
+      : `<div class="empty">Aucune séance enregistrée.</div>`}
+  </div>`;
+}
+
+/* ---------- Vue Planning ---------- */
+const startOfDay = ms => { const d=new Date(ms); d.setHours(0,0,0,0); return d.getTime(); };
+function rdvsBetween(a,b){
+  return Object.entries(S.rdv).map(([id,r])=>({id,...r})).filter(r=>r.ts>=a && r.ts<b).sort((x,y)=>x.ts-y.ts);
+}
+function viewPlanning(){
+  const from=startOfDay(Date.now()), to=from+35*86400000;
+  const list=rdvsBetween(from,to);
+  const groups={}; list.forEach(r=>{ const k=startOfDay(r.ts); (groups[k]=groups[k]||[]).push(r); });
+  const keys=Object.keys(groups).map(Number).sort((a,b)=>a-b);
+  return `
+  <div class="top"><h1>Planning</h1><button class="btn-primary" data-act="new-rdv">＋ Prévoir</button></div>
+  ${keys.length? keys.map(k=>`
+    <div class="card"><div class="eyebrow">${k===from?"Aujourd'hui":esc(dayLong(k))}</div>
+      <div class="list">${groups[k].map(r=>`
+        <button class="item tappable" data-act="edit-rdv" data-id="${r.id}">
+          <div class="num" style="width:3.4em;font-weight:500">${esc(r.heure||"")}</div>
+          <div class="grow"><div class="item-title">${esc(clientName(S.clients[r.clientId]))}</div><div class="small muted">${r.duree?esc(dur(r.duree))+" prévues":""}${r.duree&&r.note?" · ":""}${esc(r.note||"")}</div></div>
+          <span class="chev">›</span></button>`).join("")}</div></div>`).join("")
+  : `<div class="card"><div class="empty">Aucun passage prévu sur les 5 prochaines semaines.<br>Touchez « Prévoir » pour en ajouter.</div></div>`}`;
+}
+
+/* ---------- Vue Récap ---------- */
+function viewRecap(){
+  const mk=UI.month;
+  const rows = sortedClients().map(c=>({c, r:compute(c.id,mk), p:isPaid(c.id,mk)})).filter(x=>x.r.n>0);
+  const tot = rows.reduce((a,x)=>a+x.r.total,0), mins=rows.reduce((a,x)=>a+x.r.minutes,0);
+  const paid = rows.filter(x=>x.p).reduce((a,x)=>a+x.r.total,0);
+  const planned = rdvsBetween(new Date(+mk.slice(0,4),+mk.slice(5)-1,1).getTime(), new Date(+mk.slice(0,4),+mk.slice(5),1).getTime());
+  return `
+  <h1>Récapitulatif</h1>
+  <div class="month-nav">
+    <button class="icon-btn" data-act="month" data-d="-1" aria-label="Mois précédent">${ICONS.prev}</button>
+    <h2>${esc(monthLabel(mk))}</h2>
+    <button class="icon-btn" data-act="month" data-d="1" aria-label="Mois suivant">${ICONS.next}</button>
+  </div>
+  <div class="stats">
+    <div class="stat"><b>${dur(mins)}</b><span>heures effectuées</span></div>
+    <div class="stat"><b>${eur(tot)}</b><span>total du mois</span></div>
+    <div class="stat"><b>${eur(paid)}</b><span>encaissé</span></div>
+    <div class="stat"><b>${eur(tot-paid)}</b><span>reste à encaisser</span></div>
+  </div>
+  <div class="card"><h2>Par client</h2>
+    ${rows.length?`<div class="list">${rows.map(x=>`
+      <button class="item tappable" data-act="open-month" data-client="${x.c.id}" data-month="${mk}">
+        <div class="grow"><div class="item-title">${esc(clientName(x.c))}</div><div class="small muted num">${x.r.n} séance${x.r.n>1?"s":""} · ${dur(x.r.minutes)}</div></div>
+        <div class="num" style="font-weight:500">${eur(x.r.total)}</div>
+        <span class="pill ${x.p?"pill-ok":"pill-warn"}">${x.p?"Payé":"À régler"}</span></button>`).join("")}</div>`
+    : `<div class="empty">Aucune séance ce mois-ci.</div>`}
+  </div>
+  ${planned.length?`<div class="card"><h2>Passages prévus</h2><div class="list">${planned.map(r=>`
+    <div class="item"><div class="num small" style="width:6.5em">${esc(dayLabel(r.ts))}</div><div class="grow">${esc(clientName(S.clients[r.clientId]))}</div><div class="num small muted">${esc(r.heure||"")}</div></div>`).join("")}</div></div>`:""}`;
+}
+
+function renderMain(){
+  if(!loaded){ app.innerHTML='<div class="empty" style="padding-top:40vh">Chargement…</div>'; return; }
+  const v = {chrono:viewChrono, clients:viewClients, planning:viewPlanning, recap:viewRecap}[UI.view]();
+  const y = window.scrollY;
+  app.innerHTML = v; renderTabs(); manageTick();
+  window.scrollTo(0,y);
+  if(UI.sheet && UI.sheet.refresh) UI.sheet.refresh();
+}
+
+/* ---------- Feuilles (formulaires) ---------- */
+function openSheet(html, opts={}){
+  sheetRoot.innerHTML = `<div class="sheet-bg" data-act="close-bg"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
+  UI.sheet = opts; document.body.style.overflow="hidden";
+}
+function closeSheet(){ sheetRoot.innerHTML=""; UI.sheet=null; document.body.style.overflow=""; }
+const sheetHead = t => `<div class="sheet-head"><h2>${esc(t)}</h2><button class="icon-btn" data-act="close" aria-label="Fermer">✕</button></div>`;
+
+/* Fiche client */
+const TACHES = ["Ménage","Repassage","Vitres","Escalier commun","Sols","Salle de bain","Cuisine","Courses"];
+function openClientForm(id){
+  const c = id? S.clients[id] : {tarif:{type:"horaire"}, taches:[]};
+  const t = c.tarif||{type:"horaire"};
+  openSheet(`${sheetHead(id?"Modifier la fiche":"Nouveau client")}
+  <form id="client-form" class="sheet-form" style="display:flex;flex-direction:column;gap:12px">
+    <div class="grid2"><label for="c-prenom">Prénom<input id="c-prenom" value="${esc(c.prenom)}" autocomplete="off"></label>
+    <label for="c-nom">Nom<input id="c-nom" value="${esc(c.nom)}" autocomplete="off"></label></div>
+    <label for="c-adresse">Adresse<textarea id="c-adresse" rows="2" style="min-height:60px">${esc(c.adresse)}</textarea></label>
+    <label for="c-tel">Téléphone<input id="c-tel" type="tel" inputmode="tel" value="${esc(c.tel)}"></label>
+    <div><div class="eyebrow" style="margin-bottom:8px">Tâches</div><div class="chips" id="c-taches">
+      ${[...new Set([...TACHES,...(c.taches||[])])].map(x=>`<button type="button" class="chip" data-act="chip" aria-pressed="${(c.taches||[]).includes(x)}" data-v="${esc(x)}">${esc(x)}</button>`).join("")}
+    </div></div>
+    <div><div class="eyebrow" style="margin-bottom:8px">Tarif</div>
+      <div class="seg" id="c-type">
+        <button type="button" data-act="type" data-v="horaire" aria-pressed="${t.type==="horaire"}">À l'heure</button>
+        <button type="button" data-act="type" data-v="forfait" aria-pressed="${t.type==="forfait"}">Forfait mois</button>
+        <button type="button" data-act="type" data-v="prestation" aria-pressed="${t.type==="prestation"}">Par passage</button>
+      </div></div>
+    <div id="f-horaire" ${t.type==="horaire"?"":"hidden"}><label for="c-taux">Taux horaire (€)<input id="c-taux" inputmode="decimal" value="${esc(t.taux??"")}" placeholder="ex. 18"></label></div>
+    <div id="f-forfait" ${t.type==="forfait"?"":"hidden"} style="display:flex;flex-direction:column;gap:10px">
+      <div class="grid2"><label for="c-montant">Montant / mois (€)<input id="c-montant" inputmode="decimal" value="${esc(t.montant??"")}" placeholder="ex. 280"></label>
+      <label for="c-heures">Heures incluses<input id="c-heures" inputmode="decimal" value="${esc(t.heures??"")}" placeholder="ex. 16"></label></div>
+      <label for="c-sup">Heure en plus (€)<input id="c-sup" inputmode="decimal" value="${esc(t.tauxSup??"")}" placeholder="laisser vide si non facturé"></label>
+    </div>
+    <div id="f-prestation" ${t.type==="prestation"?"":"hidden"}><label for="c-prix">Prix par passage (€)<input id="c-prix" inputmode="decimal" value="${esc(t.prix??"")}" placeholder="ex. 40"></label></div>
+    <label for="c-depl">Déplacement par passage (€, facultatif)<input id="c-depl" inputmode="decimal" value="${esc(c.deplacement??"")}" placeholder="0"></label>
+    <label for="c-comment">Commentaire<textarea id="c-comment" placeholder="Code portail, clés, consignes…">${esc(c.commentaire)}</textarea></label>
+    <button class="btn-primary" type="submit">Enregistrer</button>
+    ${id?`<div id="del-zone"><button type="button" class="btn-ghost btn-danger" data-act="ask-del-client">Supprimer ce client</button></div>`:""}
+  </form>`, {kind:"client", id, type:t.type});
+}
+async function submitClient(){
+  const o=UI.sheet, g=i=>document.getElementById(i).value.trim();
+  const type=o.type;
+  const tarif = type==="forfait"? {type, montant:num(g("c-montant")), heures:num(g("c-heures")), tauxSup:num(g("c-sup"))}
+    : type==="prestation"? {type, prix:num(g("c-prix"))} : {type:"horaire", taux:num(g("c-taux"))};
+  const taches=[...document.querySelectorAll('#c-taches .chip[aria-pressed="true"]')].map(b=>b.dataset.v);
+  if(!g("c-nom") && !g("c-prenom")){ toast("Indiquez au moins un nom"); return; }
+  const id=o.id||uid();
+  const prev = S.clients[id]||{};
+  await put("clients",id,{...prev, prenom:g("c-prenom"), nom:g("c-nom"), adresse:g("c-adresse"), tel:g("c-tel"), taches, tarif, deplacement:num(g("c-depl")), commentaire:g("c-comment"), cree: prev.cree||Date.now()});
+  closeSheet(); toast("Fiche enregistrée");
+  if(o.thenSelect){ const ch=chrono(); await put("config","chrono",{...ch, clientId:id}); }
+}
+
+/* Fin de séance */
+function openEndSheet(){
+  const p=(chrono().pending); if(!p) return;
+  const min=(p.fin-p.debut)/60000;
+  openSheet(`${sheetHead("Séance terminée")}
+    <div><div class="eyebrow">${esc(clientName(S.clients[p.clientId]))}</div>
+    <div style="font-size:2rem;font-weight:300" class="num">${dur(min)}</div>
+    <div class="muted small">${esc(dayLabel(p.debut))}, de ${hm(p.debut)} à ${hm(p.fin)}${reglages().arrondi? " · facturé "+dur(billedMin(p)) : ""}</div></div>
+    <label for="end-note">Note (facultatif)<input id="end-note" placeholder="ex. repassage en plus"></label>
+    <button class="btn-primary" data-act="save-end">Enregistrer la séance</button>
+    <button class="btn-ghost btn-danger" data-act="discard-end">Ne pas enregistrer</button>`, {kind:"end"});
+}
+async function saveEnd(keep){
+  const ch=chrono(), p=ch.pending; if(!p){closeSheet();return;}
+  if(keep){ const note=(document.getElementById("end-note")||{}).value||""; await put("seances",uid(),{clientId:p.clientId, debut:p.debut, fin:p.fin, note:note.trim()}); toast("Séance enregistrée"); }
+  await put("config","chrono",{running:false, clientId:p.clientId});
+  closeSheet();
+}
+
+/* Séance (ajout / correction) */
+function openSeanceForm(id, clientId){
+  const s = id? S.seances[id] : (()=>{ const d=new Date(); d.setMinutes(0,0,0); const f=d.getTime(); return {clientId, debut:f-2*3600000, fin:f, note:""}; })();
+  openSheet(`${sheetHead(id?"Corriger la séance":"Ajouter une séance")}
+  <form id="seance-form" style="display:flex;flex-direction:column;gap:12px">
+    <label for="s-client">Client<select id="s-client">${clientOptions(s.clientId,false)}</select></label>
+    <label for="s-date">Date<input id="s-date" type="date" value="${dateInput(s.debut)}"></label>
+    <div class="grid2"><label for="s-deb">Début<input id="s-deb" type="time" value="${timeInput(s.debut)}"></label>
+    <label for="s-fin">Fin<input id="s-fin" type="time" value="${timeInput(s.fin)}"></label></div>
+    <label for="s-note">Note<input id="s-note" value="${esc(s.note)}"></label>
+    <button class="btn-primary" type="submit">Enregistrer</button>
+    ${id?`<div id="del-zone"><button type="button" class="btn-ghost btn-danger" data-act="ask-del-seance">Supprimer cette séance</button></div>`:""}
+  </form>`, {kind:"seance", id});
+}
+async function submitSeance(){
+  const g=i=>document.getElementById(i).value;
+  const cid=g("s-client"); if(!cid){ toast("Choisissez un client"); return; }
+  if(!g("s-date")||!g("s-deb")||!g("s-fin")){ toast("Date et heures requises"); return; }
+  const debut=fromInputs(g("s-date"),g("s-deb")); let fin=fromInputs(g("s-date"),g("s-fin"));
+  if(fin<=debut) fin+=86400000;
+  const id=UI.sheet.id||uid();
+  await put("seances",id,{clientId:cid, debut, fin, note:g("s-note").trim()});
+  const wasMonth = UI.sheet.kind==="seance" && UI.sheet.back;
+  closeSheet(); toast("Séance enregistrée");
+  if(wasMonth) openMonthSheet(wasMonth.cid, wasMonth.mk);
+}
+
+/* Détail client × mois */
+function openMonthSheet(cid, mk){
+  const build = () => {
+    const c=S.clients[cid], r=compute(cid,mk), p=isPaid(cid,mk), ar=arrears(cid,mk);
+    return `${sheetHead(clientName(c))}
+    <div class="row"><div class="grow"><div class="eyebrow" style="text-transform:capitalize">${esc(monthLabel(mk))}</div>
+      <div style="font-size:1.6rem;font-weight:500" class="num">${eur(r.total)}</div>
+      <div class="small muted num">${r.n} séance${r.n>1?"s":""} · ${dur(r.minutes)}${ar.sum>0?` · <span style="color:var(--warn)">${eur(ar.sum)} dû des mois précédents</span>`:""}</div></div>
+      <span class="pill ${p?"pill-ok":"pill-warn"}">${p?"Payé":"À régler"}</span></div>
+    <label class="row" for="paid-box" style="flex-direction:row;align-items:center;gap:12px;color:var(--ink);font-size:1rem;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px">
+      <input type="checkbox" id="paid-box" ${p?"checked":""} style="width:24px;height:24px;min-height:0;accent-color:var(--accent)"> <span class="grow">Payé${ar.sum>0&&!p?" (règle aussi les mois précédents)":""}</span></label>
+    <button class="btn-primary" data-act="show-doc" data-client="${cid}" data-month="${mk}">Voir le récapitulatif à imprimer</button>
+    <div class="list">${r.list.map(s=>`
+      <button class="item tappable" data-act="edit-seance" data-id="${s.id}" data-client="${cid}" data-month="${mk}">
+        <div class="grow"><div class="item-title">${esc(dayLabel(s.debut))}</div><div class="small muted num">${hm(s.debut)} – ${hm(s.fin)}${s.note?" · "+esc(s.note):""}</div></div>
+        <div class="num">${dur(billedMin(s))}</div><span class="chev">›</span></button>`).join("") || '<div class="empty">Aucune séance.</div>'}</div>
+    <button data-act="add-seance" data-client="${cid}" data-month="${mk}">Ajouter une séance</button>`;
+  };
+  openSheet(build(), {kind:"month", cid, mk, refresh(){ const sh=sheetRoot.querySelector(".sheet"); if(sh && UI.sheet && UI.sheet.kind==="month"){ const st=sh.scrollTop; sh.innerHTML=build(); sh.scrollTop=st; } }});
+}
+
+/* Rendez-vous */
+function openRdvForm(id){
+  const r = id? S.rdv[id] : {clientId:"", ts:startOfDay(Date.now()+86400000), heure:"09:00", duree:120, note:""};
+  openSheet(`${sheetHead(id?"Passage prévu":"Prévoir un passage")}
+  <form id="rdv-form" style="display:flex;flex-direction:column;gap:12px">
+    <label for="r-client">Client<select id="r-client">${clientOptions(r.clientId,false)}</select></label>
+    <div class="grid2"><label for="r-date">Date<input id="r-date" type="date" value="${dateInput(r.ts)}"></label>
+    <label for="r-heure">Heure<input id="r-heure" type="time" value="${esc(r.heure||"09:00")}"></label></div>
+    <label for="r-duree">Durée prévue<select id="r-duree">${[30,60,90,120,150,180,240,300,360,480].map(m=>`<option value="${m}" ${m===Number(r.duree)?"selected":""}>${dur(m)}</option>`).join("")}</select></label>
+    ${id?"":`<label for="r-rep">Répéter<select id="r-rep"><option value="0">Une seule fois</option><option value="7">Chaque semaine (8 semaines)</option><option value="14">Toutes les 2 semaines (8 fois)</option></select></label>`}
+    <label for="r-note">Note<input id="r-note" value="${esc(r.note)}" placeholder="ex. vitres ce jour-là"></label>
+    <button class="btn-primary" type="submit">Enregistrer</button>
+    ${id?`<button type="button" data-act="rdv-start" data-client="${esc(r.clientId)}">Démarrer le chrono pour ce client</button><div id="del-zone"><button type="button" class="btn-ghost btn-danger" data-act="ask-del-rdv">Supprimer ce passage</button></div>`:""}
+  </form>`, {kind:"rdv", id});
+}
+async function submitRdv(){
+  const g=i=>document.getElementById(i).value;
+  const cid=g("r-client"); if(!cid){ toast("Choisissez un client"); return; }
+  if(!g("r-date")){ toast("Choisissez une date"); return; }
+  const base={clientId:cid, heure:g("r-heure"), duree:Number(g("r-duree")), note:g("r-note").trim()};
+  const ts=fromInputs(g("r-date"), g("r-heure"));
+  if(UI.sheet.id){ await put("rdv",UI.sheet.id,{...base, ts}); }
+  else {
+    const rep=Number((document.getElementById("r-rep")||{}).value||0);
+    const n=rep?8:1;
+    for(let i=0;i<n;i++){ const d=new Date(ts); d.setDate(d.getDate()+i*rep); await put("rdv",uid(),{...base, ts:d.getTime()}); }
+  }
+  closeSheet(); toast("Planning mis à jour");
+}
+
+/* Réglages */
+function openSettings(){
+  const r=reglages();
+  openSheet(`${sheetHead("Réglages")}
+  <form id="settings-form" style="display:flex;flex-direction:column;gap:12px">
+    <label for="g-nom">Votre prénom (en-tête du récapitulatif)<input id="g-nom" value="${esc(r.nom)}"></label>
+    <label for="g-spot">Lien de votre playlist Spotify<input id="g-spot" type="url" value="${esc(r.spotify)}" placeholder="https://open.spotify.com/playlist/…"></label>
+    <div class="hint">Dans Spotify : playlist › ··· › Partager › Copier le lien, puis collez-le ici.</div>
+    <label for="g-arr">Arrondi du temps facturé<select id="g-arr">
+      <option value="0" ${!Number(r.arrondi)?"selected":""}>Aucun (à la minute)</option>
+      <option value="15" ${Number(r.arrondi)===15?"selected":""}>Au quart d'heure le plus proche</option>
+      <option value="30" ${Number(r.arrondi)===30?"selected":""}>À la demi-heure la plus proche</option></select></label>
+    <button class="btn-primary" type="submit">Enregistrer</button>
+  </form>
+  <div class="card" style="background:var(--bg)">
+    <h2>Sauvegarde</h2>
+    <div class="hint">Les données restent sur ce téléphone. Faites une sauvegarde une fois par mois (dans Fichiers, Drive ou par e-mail) pour ne rien perdre en cas de changement de téléphone.${r.derniereSauvegarde?"<br>Dernière sauvegarde : "+esc(new Date(r.derniereSauvegarde).toLocaleDateString("fr-FR")):""}</div>
+    <div class="row"><button class="grow" data-act="export">Sauvegarder</button><button class="grow" data-act="import">Restaurer</button></div>
+    <input type="file" id="import-file" accept="application/json,.json" hidden>
+  </div>`, {kind:"settings"});
+}
+async function submitSettings(){
+  const g=i=>document.getElementById(i).value.trim();
+  await put("config","reglages",{...reglages(), nom:g("g-nom")||"Sandra", spotify:g("g-spot"), arrondi:Number(g("g-arr"))});
+  closeSheet(); toast("Réglages enregistrés");
+}
+
+/* ---------- Récapitulatif imprimable ---------- */
+function docData(cid, mk){
+  const c=S.clients[cid]||{}, r=compute(cid,mk), ar=arrears(cid,mk), p=isPaid(cid,mk);
+  return {c, r, ar, p, mk, nom:reglages().nom, totalDu: p?0:(r.total+ar.sum)};
+}
+function openDoc(cid, mk){
+  const d=docData(cid,mk);
+  openSheet(`${sheetHead("Récapitulatif")}
+  <div class="paper" id="paper">
+    <div class="p-muted" style="font-size:.78rem;letter-spacing:.06em;text-transform:uppercase">${esc(d.nom)} · services à domicile</div>
+    <h3>Récapitulatif de prestations</h3>
+    <div class="p-muted" style="text-transform:capitalize">${esc(monthLabel(mk))}</div>
+    <div style="margin-top:14px"><div style="font-weight:600">${esc(clientName(d.c))}</div>${d.c.adresse?`<div style="white-space:pre-line" class="p-muted">${esc(d.c.adresse)}</div>`:""}</div>
+    <div class="table-scroll"><table>
+      <thead><tr><th>Date</th><th>Horaires</th><th class="r">Durée</th></tr></thead>
+      <tbody>${d.r.list.map(s=>`<tr><td>${esc(dayLabel(s.debut))}${s.note?`<div class="p-muted" style="font-size:.8rem">${esc(s.note)}</div>`:""}</td><td>${hm(s.debut)} – ${hm(s.fin)}</td><td class="r">${dur(billedMin(s))}</td></tr>`).join("")}
+      <tr class="tot"><td colspan="2" style="font-weight:600">Total heures</td><td class="r" style="font-weight:600">${dur(d.r.minutes)}</td></tr></tbody>
+    </table>
+    <table><tbody>
+      ${d.r.lines.map(l=>`<tr><td>${esc(l.label)}</td><td class="r">${eur(l.montant)}</td></tr>`).join("")}
+      <tr><td style="font-weight:600">Montant du mois</td><td class="r" style="font-weight:600">${eur(d.r.total)}</td></tr>
+      ${!d.p && d.ar.sum>0?`<tr><td>Reste dû (${d.ar.months.map(monthLabel).join(", ")})</td><td class="r">${eur(d.ar.sum)}</td></tr>`:""}
+      <tr class="grand"><td>${d.p?"Réglé, merci":"Total à régler"}</td><td class="r">${d.p?eur(d.r.total):eur(d.totalDu)}</td></tr>
+    </tbody></table></div>
+    <div class="p-muted" style="margin-top:16px;font-size:.8rem">Édité le ${new Date().toLocaleDateString("fr-FR")}</div>
+  </div>
+  <div class="row"><button class="btn-primary grow" data-act="print">Imprimer</button><button class="grow" data-act="pdf" data-client="${cid}" data-month="${mk}">PDF</button></div>
+  <button data-act="copy-doc" data-client="${cid}" data-month="${mk}">Copier en texte (SMS, e-mail)</button>`, {kind:"doc"});
+}
+function docText(cid,mk){
+  const d=docData(cid,mk); const L=[];
+  L.push("Récapitulatif de prestations – "+monthLabel(mk));
+  L.push(clientName(d.c)); L.push("");
+  d.r.list.forEach(s=>L.push(dayLabel(s.debut)+" : "+hm(s.debut)+" – "+hm(s.fin)+" ("+dur(billedMin(s))+")"));
+  L.push(""); L.push("Total heures : "+dur(d.r.minutes));
+  d.r.lines.forEach(l=>L.push(l.label+" : "+eur(l.montant)));
+  L.push("Montant du mois : "+eur(d.r.total));
+  if(!d.p && d.ar.sum>0) L.push("Reste dû des mois précédents : "+eur(d.ar.sum));
+  L.push(d.p ? "Réglé, merci." : "Total à régler : "+eur(d.totalDu));
+  L.push(""); L.push(d.nom);
+  return L.join("\n").replace(/[  ]/g," ");
+}
+async function copyDoc(cid,mk){
+  const t=docText(cid,mk);
+  try{ await navigator.clipboard.writeText(t); toast("Texte copié"); }
+  catch(e){ const ta=document.createElement("textarea"); ta.value=t; ta.style.minHeight="200px"; const p=document.getElementById("paper"); p.after(ta); ta.select(); toast("Sélectionnez et copiez le texte"); }
+}
+async function makePdf(cid,mk){
+  if(!window.jspdf){ toast("Création du PDF indisponible"); return; }
+  const d=docData(cid,mk), T=s=>String(s).replace(/[  ]/g," ");
+  const doc=new window.jspdf.jsPDF({unit:"mm",format:"a4"});
+  const W=210, M=20; let y=24;
+  doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(95,109,103);
+  doc.text(T(d.nom.toUpperCase()+" · SERVICES À DOMICILE"),M,y); y+=10;
+  doc.setTextColor(30,41,37); doc.setFont("times","normal"); doc.setFontSize(22);
+  doc.text("Récapitulatif de prestations",M,y); y+=8;
+  doc.setFont("helvetica","normal"); doc.setFontSize(11); doc.setTextColor(95,109,103);
+  const ml=monthLabel(mk); doc.text(T(ml.charAt(0).toUpperCase()+ml.slice(1)),M,y); y+=12;
+  doc.setTextColor(30,41,37); doc.setFont("helvetica","bold"); doc.text(T(clientName(d.c)),M,y); y+=5.5;
+  doc.setFont("helvetica","normal"); doc.setTextColor(95,109,103);
+  (d.c.adresse||"").split("\n").forEach(l=>{ if(l.trim()){ doc.text(T(l),M,y); y+=5; } });
+  y+=6;
+  const head=(cols)=>{ doc.setFontSize(8.5); doc.setTextColor(95,109,103); doc.setFont("helvetica","bold"); cols.forEach(([t,x,al])=>doc.text(t,x,y,{align:al||"left"})); y+=2.5; doc.setDrawColor(207,216,211); doc.line(M,y,W-M,y); y+=5.5; doc.setFont("helvetica","normal"); doc.setFontSize(10.5); doc.setTextColor(30,41,37); };
+  head([["DATE",M],["HORAIRES",M+70],["DURÉE",W-M,"right"]]);
+  d.r.list.forEach(s=>{
+    if(y>265){ doc.addPage(); y=24; }
+    doc.text(T(dayLabel(s.debut)),M,y); doc.text(T(hm(s.debut)+" – "+hm(s.fin)),M+70,y); doc.text(T(dur(billedMin(s))),W-M,y,{align:"right"});
+    if(s.note){ y+=4.5; doc.setFontSize(9); doc.setTextColor(95,109,103); doc.text(T(s.note).slice(0,90),M,y); doc.setFontSize(10.5); doc.setTextColor(30,41,37); }
+    y+=3; doc.setDrawColor(230,236,233); doc.line(M,y,W-M,y); y+=5.5;
+  });
+  doc.setFont("helvetica","bold"); doc.text("Total heures",M,y); doc.text(T(dur(d.r.minutes)),W-M,y,{align:"right"}); y+=12;
+  doc.setFont("helvetica","normal");
+  const line=(a,b,bold)=>{ if(y>270){doc.addPage(); y=24;} doc.setFont("helvetica",bold?"bold":"normal"); doc.text(T(a),M,y); doc.text(T(b),W-M,y,{align:"right"}); y+=7; };
+  d.r.lines.forEach(l=>line(l.label, eur(l.montant)));
+  line("Montant du mois", eur(d.r.total), true);
+  if(!d.p && d.ar.sum>0) line("Reste dû ("+d.ar.months.map(monthLabel).join(", ")+")", eur(d.ar.sum));
+  y+=1; doc.setDrawColor(30,41,37); doc.setLineWidth(.5); doc.line(M,y-4,W-M,y-4); y+=2;
+  doc.setFontSize(12.5); line(d.p?"Réglé, merci":"Total à régler", d.p?eur(d.r.total):eur(d.totalDu), true);
+  doc.setFontSize(9); doc.setTextColor(95,109,103); doc.setFont("helvetica","normal");
+  doc.text(T("Édité le "+new Date().toLocaleDateString("fr-FR")),M,y+6);
+  const name=("Recap "+clientName(d.c)+" "+mk).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^\w\- ]/g,"").trim()+".pdf";
+  await shareOrDownload(doc.output("blob"), name, "application/pdf");
+}
+
+async function shareOrDownload(blob, name, type){
+  try{
+    const file=new File([blob], name, {type});
+    if(navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], title:name}); return true; }
+  }catch(e){ if(e && e.name==="AbortError") return false; }
+  const url=URL.createObjectURL(blob); const a=document.createElement("a");
+  a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000); return true;
+}
+async function exportData(){
+  const name="carnet-sandra-"+dateInput(Date.now())+".json";
+  const ok=await shareOrDownload(new Blob([JSON.stringify({app:"carnet-sandra",version:1,data:S})],{type:"application/json"}), name, "application/json");
+  if(ok){ S.config.reglages={...reglages(), derniereSauvegarde:Date.now()}; saveLocal(); toast("Sauvegarde créée"); }
+}
+document.addEventListener("change", ev=>{
+  if(ev.target.id!=="import-file" || !ev.target.files[0]) return;
+  const fr=new FileReader();
+  fr.onload=()=>{
+    try{
+      const j=JSON.parse(fr.result); if(!j || j.app!=="carnet-sandra" || !j.data) throw 0;
+      COLS.forEach(c=>S[c]=j.data[c]||{}); saveLocal(); closeSheet(); renderMain(); toast("Données restaurées");
+    }catch(e){ toast("Ce fichier n'est pas une sauvegarde du carnet"); }
+  };
+  fr.readAsText(ev.target.files[0]);
+});
+
+/* ---------- Confirmations intégrées ---------- */
+function askDelete(label, onYes){
+  const z=document.getElementById("del-zone"); if(!z) return;
+  z.innerHTML=`<div class="confirm"><div>${esc(label)}</div><div class="row"><button type="button" class="btn-danger grow" data-act="yes-del">Oui, supprimer</button><button type="button" class="grow" data-act="no-del">Annuler</button></div></div>`;
+  UI.sheet.onYes=onYes;
+}
+
+/* ---------- Événements ---------- */
+document.addEventListener("click", async ev=>{
+  const tab=ev.target.closest("[data-tab]");
+  if(tab){ UI.view=tab.dataset.tab; if(UI.view!=="clients") UI.clientDetail=null; closeSheet(); window.scrollTo(0,0); renderMain(); return; }
+  const el=ev.target.closest("[data-act]"); if(!el) return;
+  const a=el.dataset.act, ds=el.dataset;
+  if(a==="close-bg"){ if(ev.target===el) closeSheet(); return; }
+  switch(a){
+    case "close": closeSheet(); break;
+    case "settings": openSettings(); break;
+    case "start": startChrono(); break;
+    case "stop": stopChrono(); break;
+    case "pick-rdv": if(!chrono().running){ await put("config","chrono",{...chrono(), clientId:ds.client}); toast("Client choisi"); } break;
+    case "new-client": openClientForm(null); break;
+    case "open-client": UI.clientDetail=ds.id; window.scrollTo(0,0); renderMain(); break;
+    case "back-clients": UI.clientDetail=null; renderMain(); break;
+    case "edit-client": openClientForm(ds.id); break;
+    case "chip": el.setAttribute("aria-pressed", el.getAttribute("aria-pressed")!=="true"); break;
+    case "type":
+      UI.sheet.type=ds.v;
+      document.querySelectorAll("#c-type button").forEach(b=>b.setAttribute("aria-pressed", b===el));
+      ["horaire","forfait","prestation"].forEach(k=>document.getElementById("f-"+k).hidden = k!==ds.v);
+      break;
+    case "add-seance": { const back = ds.month? {cid:ds.client, mk:ds.month} : null; openSeanceForm(null, ds.client); UI.sheet.back=back; break; }
+    case "edit-seance": openSeanceForm(ds.id); UI.sheet.back={cid:ds.client, mk:ds.month}; break;
+    case "open-month": openMonthSheet(ds.client, ds.month); break;
+    case "show-doc": openDoc(ds.client, ds.month); break;
+    case "pdf": makePdf(ds.client, ds.month); break;
+    case "print": window.print(); break;
+    case "export": exportData(); break;
+    case "import": document.getElementById("import-file").click(); break;
+    case "copy-doc": copyDoc(ds.client, ds.month); break;
+    case "save-end": saveEnd(true); break;
+    case "discard-end":
+      if(el.dataset.sure){ saveEnd(false); } else { el.dataset.sure="1"; el.textContent="Confirmer : ne pas enregistrer"; }
+      break;
+    case "new-rdv": openRdvForm(null); break;
+    case "edit-rdv": openRdvForm(ds.id); break;
+    case "rdv-start": closeSheet(); UI.view="chrono"; if(!chrono().running) await put("config","chrono",{running:false, clientId:ds.client}); renderMain(); break;
+    case "month": UI.month=shiftMonth(UI.month, Number(ds.d)); renderMain(); break;
+    case "ask-del-client": { const id=UI.sheet.id; askDelete("Supprimer la fiche ? Les séances déjà enregistrées restent dans l'historique.", async()=>{ await del("clients",id); closeSheet(); UI.clientDetail=null; renderMain(); toast("Client supprimé"); }); break; }
+    case "ask-del-seance": { const id=UI.sheet.id, back=UI.sheet.back; askDelete("Supprimer définitivement cette séance ?", async()=>{ await del("seances",id); closeSheet(); toast("Séance supprimée"); if(back) openMonthSheet(back.cid, back.mk); }); break; }
+    case "ask-del-rdv": { const id=UI.sheet.id; askDelete("Supprimer ce passage prévu ?", async()=>{ await del("rdv",id); closeSheet(); toast("Passage supprimé"); }); break; }
+    case "yes-del": if(UI.sheet && UI.sheet.onYes) UI.sheet.onYes(); break;
+    case "no-del": { const z=document.getElementById("del-zone"); if(z) z.innerHTML=`<button type="button" class="btn-ghost btn-danger" data-act="${UI.sheet.kind==="client"?"ask-del-client":UI.sheet.kind==="seance"?"ask-del-seance":"ask-del-rdv"}">Supprimer</button>`; break; }
+  }
+});
+document.addEventListener("change", async ev=>{
+  const t=ev.target;
+  if(t.id==="sel-client"){
+    if(t.value==="__new"){ t.value=chrono().clientId||""; openClientForm(null); UI.sheet.thenSelect=true; return; }
+    await put("config","chrono",{...chrono(), running:false, clientId:t.value});
+  }
+  if(t.id==="paid-box" && UI.sheet && UI.sheet.kind==="month"){ await setPaid(UI.sheet.cid, UI.sheet.mk, t.checked); }
+});
+document.addEventListener("submit", ev=>{
+  ev.preventDefault();
+  const id=ev.target.id;
+  if(id==="client-form") submitClient();
+  else if(id==="seance-form") submitSeance();
+  else if(id==="rdv-form") submitRdv();
+  else if(id==="settings-form") submitSettings();
+});
+
+let toastT=null;
+function toast(msg){
+  const r=document.getElementById("toast-root"); r.innerHTML=`<div class="toast" role="status">${esc(msg)}</div>`;
+  clearTimeout(toastT); toastT=setTimeout(()=>r.innerHTML="",2400);
+}
+
+/* ---------- Démarrage ---------- */
+function boot(){
+  loadLocal(); loaded=true; renderMain();
+  try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}
+  if(chrono().pending) openEndSheet();
+}
+boot();
+})();
+</script>
+<script>
+if("serviceWorker" in navigator && location.protocol==="https:"){ navigator.serviceWorker.register("sw.js").catch(()=>{}); }
+</script>
+</body>
+</html>
