@@ -427,8 +427,10 @@ function viewClientDetail(id){
     <div><div class="eyebrow">Tarif</div><div>${esc(tarifLabel(c))}${num(c.deplacement)?" · déplacement "+eur(c.deplacement):""}</div></div>
     ${(c.taches||[]).length?`<div><div class="eyebrow">Tâches</div><div class="chips" style="margin-top:6px">${c.taches.map(t=>`<span class="pill pill-neutral">${esc(t)}</span>`).join("")}</div></div>`:""}
     ${c.commentaire?`<div><div class="eyebrow">Commentaire</div><div style="white-space:pre-line">${esc(c.commentaire)}</div></div>`:""}
-    <div class="row wrapx"><button data-act="edit-client" data-id="${id}">Modifier la fiche</button><button data-act="add-seance" data-client="${id}">Ajouter une séance</button></div>
+    <div class="row wrapx"><button data-act="edit-client" data-id="${id}">Modifier la fiche</button><button data-act="add-seance" data-client="${id}">Ajouter une séance</button><button data-act="new-rdv" data-client="${id}">Prévoir des passages</button></div>
   </div>
+  ${(()=>{ const up=rdvsBetween(startOfDay(Date.now()), Infinity).filter(x=>x.clientId===id); return `<div class="card"><div class="row"><h2 class="grow">Passages prévus</h2><button class="btn-ghost" data-act="new-rdv" data-client="${id}">+ Prévoir</button></div>
+    ${up.length?`<div class="list">${up.slice(0,6).map(rv=>`<button class="item tappable" data-act="edit-rdv" data-id="${rv.id}"><div class="num small" style="width:6.5em">${esc(dayLabel(rv.ts))}</div><div class="grow small muted">${rv.serie?"régulier":""}</div><div class="num small">${esc(rv.heure||"")}</div><span class="chev">›</span></button>`).join("")}</div>${up.length>6?`<div class="hint">+ ${up.length-6} autres dans le Planning</div>`:""}`:`<div class="empty">Aucun passage prévu.</div>`}</div>`; })()}
   <div class="card"><h2>Historique</h2>
     ${months.length?`<div class="list">${months.map(m=>{const r=compute(id,m); const p=isPaid(id,m); return `
       <button class="item tappable" data-act="open-month" data-client="${id}" data-month="${m}">
@@ -676,8 +678,9 @@ function serieLater(id){
   const r=S.rdv[id]; if(!r||!r.serie) return [];
   return Object.entries(S.rdv).map(([k,v])=>({id:k,...v})).filter(x=>x.serie===r.serie && x.id!==id && x.ts>r.ts).sort((a,b)=>a.ts-b.ts);
 }
-function openRdvForm(id){
-  const r = id? S.rdv[id] : {clientId:"", ts:startOfDay(Date.now()+86400000), heure:"09:00", duree:120, note:""};
+function openRdvForm(id, presetClient){
+  const r = id? S.rdv[id] : {clientId:presetClient||"", ts:startOfDay(Date.now()+86400000), heure:"09:00", duree:120, note:""};
+  const canRepeat = !id || !r.serie;
   const later = id ? serieLater(id) : [];
   openSheet(`${sheetHead(id?"Passage prévu":"Prévoir un passage")}
   <form id="rdv-form" style="display:flex;flex-direction:column;gap:12px">
@@ -686,7 +689,7 @@ function openRdvForm(id){
     <div class="grid2"><label for="r-date">Date<input id="r-date" type="date" value="${dateInput(r.ts)}"></label>
     <label for="r-heure">Heure<input id="r-heure" type="time" value="${esc(r.heure||"09:00")}"></label></div>
     <label for="r-duree">Durée prévue<select id="r-duree">${[30,60,90,120,150,180,240,300,360,480].map(m=>`<option value="${m}" ${m===Number(r.duree)?"selected":""}>${dur(m)}</option>`).join("")}</select></label>
-    ${id?"":`<label for="r-rep">Répéter<select id="r-rep">
+    ${!canRepeat?"":`<label for="r-rep">${id?"Rendre régulier":"Répéter"}<select id="r-rep">
       <option value="0">Une seule fois</option>
       <option value="w1-8">Chaque semaine, 2 mois</option>
       <option value="w1-26">Chaque semaine, 6 mois</option>
@@ -708,6 +711,13 @@ async function submitRdv(){
   if(id){
     const old=S.rdv[id]; const later=serieLater(id);
     const shiftDays=Math.round((startOfDay(ts)-startOfDay(old.ts))/86400000);
+    const rep=(document.getElementById("r-rep")||{}).value||"0";
+    if(rep!=="0"){
+      const serie=uid(); const kind=rep.slice(0,2), n=Number(rep.split("-")[1]);
+      await put("rdv",id,{...old, ...base, ts, serie});
+      for(let i=1;i<n;i++){ const d=new Date(ts); if(kind==="m1") d.setMonth(d.getMonth()+i); else d.setDate(d.getDate()+i*(kind==="w2"?14:7)); await put("rdv",uid(),{...base, ts:d.getTime(), serie}); }
+      closeSheet(); toast("Passages réguliers créés"); return;
+    }
     await put("rdv",id,{...old, ...base, ts});
     const box=document.getElementById("r-serie");
     if(box && box.checked){
@@ -865,7 +875,7 @@ document.addEventListener("change", ev=>{
   fr.readAsText(ev.target.files[0]);
 });
 
-const APP_VERSION = "Version du 29/10/2026";
+const APP_VERSION = "Version du 29/10/2026, 22h";
 async function refreshApp(){
   toast("Mise à jour de l'appli…");
   try{
@@ -921,7 +931,7 @@ document.addEventListener("click", async ev=>{
     case "discard-end":
       if(el.dataset.sure){ saveEnd(false); } else { el.dataset.sure="1"; el.textContent="Confirmer : ne pas enregistrer"; }
       break;
-    case "new-rdv": openRdvForm(null); break;
+    case "new-rdv": openRdvForm(null, ds.client); break;
     case "edit-rdv": openRdvForm(ds.id); break;
     case "rdv-start": closeSheet(); UI.view="chrono"; if(!chrono().running) await put("config","chrono",{running:false, clientId:ds.client}); renderMain(); break;
     case "month": UI.month=shiftMonth(UI.month, Number(ds.d)); renderMain(); break;
